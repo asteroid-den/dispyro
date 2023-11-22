@@ -35,6 +35,9 @@ class InvertedFilter(Filter):
     async def __call__(self, client: Client, update: Update, **deps) -> bool:
         return not await super().__call__(client, update, **deps)
 
+    def __invert__(self) -> Filter:
+        return Filter(callback=self._unwrapped_callback)
+
 
 class AndFilter(Filter):
     def __init__(self, left: AnyFilter, right: AnyFilter):
