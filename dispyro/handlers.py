@@ -19,6 +19,7 @@ from pyrogram import Client, types
 
 import dispyro
 
+from .filters import Filter
 from .signatures import (
     CallbackQueryHandlerCallback,
     ChatMemberUpdatedHandlerCallback,
@@ -51,7 +52,7 @@ class Handler:
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         if priority is not None:
             self._priority = priority
@@ -61,7 +62,7 @@ class Handler:
         self._name = name or "unnamed_handler"
         self.callback: Callback = safe_call(callable=callback)
         self._router = router
-        self._filters: dispyro.filters.Filter = dispyro.filters.Filter() & filters
+        self._filters: Filter = Filter() & filters
 
         # This field indicates whether handler was called during handling current
         # update. Defaults to `False`. Set to `False` on cleanup (after finishing
@@ -97,7 +98,7 @@ class CallbackQueryHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -127,7 +128,7 @@ class ChatMemberUpdatedHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -157,7 +158,7 @@ class ChosenInlineResultHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -187,7 +188,7 @@ class EditedMessageHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -217,7 +218,7 @@ class InlineQueryHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -247,7 +248,7 @@ class MessageHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,
@@ -277,7 +278,7 @@ class PollHandler(Handler):
         router: "dispyro.Router",
         name: str = None,
         priority: int = None,
-        filters: AnyFilter = dispyro.filters.Filter(),
+        filters: AnyFilter = Filter(),
     ):
         super().__init__(
             callback=callback,

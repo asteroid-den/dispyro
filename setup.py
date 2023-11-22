@@ -31,4 +31,5 @@ setuptools.setup(
     ],
     install_requires=requires,
     python_requires=">=3.7",
+    data_files=["requirements.txt"]
 )

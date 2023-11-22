@@ -1,4 +1,4 @@
-from typing import Union  # I prefer X | Y notation, but for compability I'll use this.
+from typing import Union
 
 import pyrogram
 from pyrogram.types import (
@@ -21,15 +21,6 @@ from .signatures.handler_callback import (
     MessageHandlerCallback,
     PollHandlerCallback,
 )
-# from .handlers import (
-#     CallbackQueryHandler,
-#     ChatMemberUpdatedHandler,
-#     ChosenInlineResultHandler,
-#     EditedMessageHandler,
-#     InlineQueryHandler,
-#     MessageHandler,
-#     PollHandler,
-# )
 
 Handler = Union[
     "dispyro.handlers.CallbackQueryHandler",
@@ -52,7 +43,12 @@ Callback = Union[
 ]
 
 Update = Union[
-    CallbackQuery, ChatMemberUpdated, ChosenInlineResult, Message, InlineQuery, Poll
+    CallbackQuery,
+    ChatMemberUpdated,
+    ChosenInlineResult,
+    Message,
+    InlineQuery,
+    Poll,
 ]
 
 AnyFilter = Union[pyrogram.filters.Filter, "dispyro.filters.Filter"]
