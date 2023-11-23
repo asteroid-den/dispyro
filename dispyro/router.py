@@ -1,6 +1,7 @@
-from typing import List, TypeVar, cast
+from typing import Dict, List, cast
 
-from pyrogram import Client, types
+from pyrogram import Client, handlers, types
+from pyrogram.handlers.handler import Handler as PyrogramHandler
 
 import dispyro
 
@@ -10,13 +11,12 @@ from .handlers_holders import (
     ChatMemberUpdatedHandlersHolder,
     ChosenInlineResultHandlersHolder,
     EditedMessageHandlersHolder,
+    HandlersHolder,
     InlineQueryHandlersHolder,
     MessageHandlersHolder,
     PollHandlersHolder,
 )
 from .union_types import Update
-
-ExpectedCondition = TypeVar("ExpectedCondition", bound="dispyro.ExpectedCondition")
 
 
 class Router:
@@ -36,11 +36,6 @@ class Router:
         self.message = MessageHandlersHolder(router=self)
         self.poll = PollHandlersHolder(router=self)
 
-        self._expected_conditions: List[ExpectedCondition] = []
-
-        # This field indicates whether any of router related handlers was
-        # called during handling current update. Defaults to `False`. Set to
-        # `False` on cleanup (after finishing update processing).
         self._triggered: bool = False
 
     def __repr__(self) -> str:
@@ -64,56 +59,30 @@ class Router:
         for handler in self.all_handlers:
             handler._triggered = False
 
-    def add_condition(self, expected_condition: ExpectedCondition):
-        self._expected_conditions.append(expected_condition)
-
     async def feed_update(
-        self, client: Client, dispatcher: "dispyro.Dispatcher", update: Update, **deps
+        self,
+        client: Client,
+        dispatcher: "dispyro.Dispatcher",
+        update: Update,
+        handler_type: PyrogramHandler,
+        **deps,
     ) -> bool:
-        update_type = type(update)
-        result = False
         run_logic = dispatcher._run_logic
 
-        for expected_condition in self._expected_conditions:
-            if not await expected_condition.check(dispatcher=dispatcher, update=update):
-                return result
+        handlers_mapping: Dict[PyrogramHandler, HandlersHolder] = {
+            handlers.CallbackQueryHandler: self.callback_query,
+            handlers.ChatMemberUpdatedHandler: self.chat_member_updated,
+            handlers.ChosenInlineResultHandler: self.chosen_inline_result,
+            handlers.EditedMessageHandler: self.edited_message,
+            handlers.InlineQueryHandler: self.inline_query,
+            handlers.MessageHandler: self.message,
+            handlers.PollHandler: self.poll,
+        }
 
-        if update_type is types.CallbackQuery:
-            result = await self.callback_query.feed_update(
-                client=client, run_logic=run_logic, update=update, **deps
-            )
+        handlers_holder = handlers_mapping[handler_type]
 
-        elif update_type is types.ChatMemberUpdated:
-            result = await self.chat_member_updated.feed_update(
-                client=client, run_logic=run_logic, update=update, **deps
-            )
-
-        elif update_type is types.ChosenInlineResult:
-            result = await self.chosen_inline_result.feed_update(
-                client=client, run_logic=run_logic, update=update, **deps
-            )
-
-        elif update_type is types.Message:
-            update = cast(types.Message, update)
-
-            if update.edit_date:
-                result = await self.edited_message.feed_update(
-                    client=client, run_logic=run_logic, update=update, **deps
-                )
-
-            else:
-                result = await self.message.feed_update(
-                    client=client, run_logic=run_logic, update=update, **deps
-                )
-
-        elif update_type is types.InlineQuery:
-            result = await self.inline_query.feed_update(
-                client=client, run_logic=run_logic, update=update, **deps
-            )
-
-        elif update_type is types.Poll:
-            result = await self.poll.feed_update(
-                client=client, run_logic=run_logic, update=update, **deps
-            )
+        result = await handlers_holder.feed_update(
+            client=client, run_logic=run_logic, update=update, **deps
+        )
 
         return result

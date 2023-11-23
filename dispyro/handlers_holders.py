@@ -52,7 +52,7 @@ class HandlersHolder:
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: Update, **deps
     ) -> bool:
-        filters_passed = await self.filters(client=client, update=update, **deps)
+        filters_passed = await self.filters(client, update, **deps)
 
         if not filters_passed:
             return
@@ -71,6 +71,7 @@ class HandlersHolder:
 
         return any(handler._triggered for handler in handlers)
 
+
 class CallbackQueryHandlersHolder(HandlersHolder):
     __handler_type__ = CallbackQueryHandler
     handlers: List[CallbackQueryHandler]
@@ -78,9 +79,7 @@ class CallbackQueryHandlersHolder(HandlersHolder):
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.CallbackQuery, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class ChatMemberUpdatedHandlersHolder(HandlersHolder):
@@ -88,15 +87,9 @@ class ChatMemberUpdatedHandlersHolder(HandlersHolder):
     handlers: List[ChatMemberUpdatedHandler]
 
     async def feed_update(
-        self,
-        client: Client,
-        run_logic: RunLogic,
-        update: types.ChatMemberUpdated,
-        **deps
+        self, client: Client, run_logic: RunLogic, update: types.ChatMemberUpdated, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class ChosenInlineResultHandlersHolder(HandlersHolder):
@@ -104,15 +97,9 @@ class ChosenInlineResultHandlersHolder(HandlersHolder):
     handlers: List[ChosenInlineResultHandler]
 
     async def feed_update(
-        self,
-        client: Client,
-        run_logic: RunLogic,
-        update: types.ChosenInlineResult,
-        **deps
+        self, client: Client, run_logic: RunLogic, update: types.ChosenInlineResult, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class EditedMessageHandlersHolder(HandlersHolder):
@@ -122,9 +109,7 @@ class EditedMessageHandlersHolder(HandlersHolder):
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.Message, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class InlineQueryHandlersHolder(HandlersHolder):
@@ -134,9 +119,7 @@ class InlineQueryHandlersHolder(HandlersHolder):
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.InlineQuery, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class MessageHandlersHolder(HandlersHolder):
@@ -146,9 +129,7 @@ class MessageHandlersHolder(HandlersHolder):
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.Message, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
 class PollHandlersHolder(HandlersHolder):
@@ -158,6 +139,4 @@ class PollHandlersHolder(HandlersHolder):
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.Poll, **deps
     ) -> bool:
-        return await super().feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
