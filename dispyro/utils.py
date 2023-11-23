@@ -1,5 +1,7 @@
+import inspect
 from functools import wraps
-from typing import Any, Callable, Dict, TypeVar
+from inspect import Parameter
+from typing import Any, Callable, Dict, List, TypeVar
 
 ReturnType = TypeVar("ReturnType")
 
@@ -9,13 +11,36 @@ def get_needed_kwargs(callable: Callable, **kwargs) -> Dict[str, Any]:
     Returns only needed kwargs in a form of a `dict`.
     """
 
-    if not getattr(callable, "__code__", None):
-        # treating `callable` as non-function object with __call__ defined
-        callable = callable.__call__
+    signature = inspect.signature(callable, follow_wrapped=False)
+    kwnames: List[str] = []
 
-    # using internals to check needed arguments
-    varnames: tuple[str, ...] = callable.__code__.co_varnames
-    needed_kwargs = {k: v for k, v in kwargs.items() if k in varnames}
+    params = signature.parameters.copy()
+
+    positional_args = list(params.keys())[:2]  # client and update are positional arguments
+
+    for argname in positional_args:
+        argparam = params[argname]
+
+        if argparam.kind is Parameter.KEYWORD_ONLY:
+            raise ValueError("client and update should be treated as positional arguments")
+
+        params.pop(argname)
+
+    for argname, argparam in params.items():
+        kind = argparam.kind
+
+        print(argname, kind)
+
+        if kind is Parameter.POSITIONAL_ONLY:
+            raise ValueError("only client and update should be positional arguments")
+
+        elif kind in {Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY}:
+            kwnames.append(argname)
+
+        elif kind is Parameter.VAR_KEYWORD:
+            return kwargs
+
+    needed_kwargs = {k: v for k, v in kwargs.items() if k in kwnames}
 
     return needed_kwargs
 
