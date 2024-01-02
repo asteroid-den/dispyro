@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Callable, Coroutine, Dict, List
 
 from pyrogram import Client, handlers, idle
 from pyrogram.handlers.handler import Handler
@@ -37,6 +37,12 @@ class Dispatcher:
                 client = self.prepare_client(client=client, clear_handlers=clear_on_prepare)
                 self._clients.append(client)
 
+    def _make_handler(self, handler_type: Handler) -> Callable[[Client, Update], Coroutine]:
+        async def handler(client: Client, update: Update):
+            await self.feed_update(client=client, update=update, handler_type=handler_type)
+
+        return handler
+
     def prepare_client(self, client: Client, clear_handlers: bool = True) -> Client:
         handler_types: List[Handler] = [
             handlers.CallbackQueryHandler,
@@ -60,9 +66,7 @@ class Dispatcher:
                 group = max(groups) + 1
 
         for handler_type in handler_types:
-
-            async def handler(client: Client, update: Update):
-                await self.feed_update(client=client, update=update, handler_type=handler_type)
+            handler = self._make_handler(handler_type=handler_type)
 
             client.add_handler(handler_type(handler), group=group)
 
