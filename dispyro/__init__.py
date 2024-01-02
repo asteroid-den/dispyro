@@ -3,7 +3,7 @@ from .dispatcher import Dispatcher, RunLogic
 from .filters import Filter
 from .router import Router
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = (
     "filters",

@@ -29,23 +29,29 @@ class HandlersHolder:
     def filter(self, filter: AnyFilter) -> None:
         self.filters &= filter
 
+    def register(
+        self, callback: Callback, filters: Filter = Filter(), priority: int = None
+    ) -> Callback:
+        handler_type = self.__handler_type__
+
+        self.handlers.append(
+            handler_type(
+                callback=callback,
+                router=self._router,
+                priority=priority,
+                filters=filters,
+            )
+        )
+
+        return callback
+
     def __call__(
         self, filters: Filter = Filter(), priority: int = None
     ) -> Callable[[Callback], Callback]:
         def decorator(callback: Callback) -> Callback:
             nonlocal filters
-
-            handler_type = self.__handler_type__
-            self.handlers.append(
-                handler_type(
-                    callback=callback,
-                    router=self._router,
-                    priority=priority,
-                    filters=filters,
-                )
-            )
-
-            return callback
+            
+            return self.register(callback=callback, filters=filters, priority=priority)
 
         return decorator
 
