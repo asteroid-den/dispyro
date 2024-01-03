@@ -29,8 +29,6 @@ def get_needed_kwargs(callable: Callable, **kwargs) -> Dict[str, Any]:
     for argname, argparam in params.items():
         kind = argparam.kind
 
-        print(argname, kind)
-
         if kind is Parameter.POSITIONAL_ONLY:
             raise ValueError("only client and update should be positional arguments")
 
