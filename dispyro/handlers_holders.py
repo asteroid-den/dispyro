@@ -1,6 +1,8 @@
-from typing import Callable, List
+from collections.abc import Container
+from typing import Callable, List, Optional
 
 from pyrogram import Client, types
+from pyrogram.raw import base
 
 import dispyro
 
@@ -10,12 +12,15 @@ from .handlers import (
     CallbackQueryHandler,
     ChatMemberUpdatedHandler,
     ChosenInlineResultHandler,
+    DeletedMessagesHandler,
     EditedMessageHandler,
     InlineQueryHandler,
     MessageHandler,
     PollHandler,
+    RawUpdateHandler,
+    UserStatusHandler,
 )
-from .union_types import AnyFilter, Callback, Handler, Update
+from .types import AnyFilter, Callback, Handler, PackedRawUpdate, Update
 
 
 class HandlersHolder:
@@ -49,8 +54,6 @@ class HandlersHolder:
         self, filters: Filter = Filter(), priority: int = None
     ) -> Callable[[Callback], Callback]:
         def decorator(callback: Callback) -> Callback:
-            nonlocal filters
-            
             return self.register(callback=callback, filters=filters, priority=priority)
 
         return decorator
@@ -61,7 +64,7 @@ class HandlersHolder:
         filters_passed = await self.filters(client, update, **deps)
 
         if not filters_passed:
-            return
+            return False
 
         self._router._triggered = True
 
@@ -108,6 +111,16 @@ class ChosenInlineResultHandlersHolder(HandlersHolder):
         return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
 
 
+class DeletedMessagesHandlersHolder(HandlersHolder):
+    __handler_type__ = DeletedMessagesHandler
+    handlers: List[DeletedMessagesHandler]
+
+    async def feed_update(
+        self, client: Client, run_logic: RunLogic, update: List[types.Message], **deps
+    ) -> bool:
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+
+
 class EditedMessageHandlersHolder(HandlersHolder):
     __handler_type__ = EditedMessageHandler
     handlers: List[EditedMessageHandler]
@@ -144,5 +157,80 @@ class PollHandlersHolder(HandlersHolder):
 
     async def feed_update(
         self, client: Client, run_logic: RunLogic, update: types.Poll, **deps
+    ) -> bool:
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+
+
+class RawUpdateHandlersHolder(HandlersHolder):
+    __handler_type__ = RawUpdateHandler
+    handlers: List[RawUpdateHandler]
+
+    async def feed_update(
+        self, client: Client, run_logic: RunLogic, update: PackedRawUpdate, **deps
+    ) -> bool:
+        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+
+    def register(
+        self,
+        callback: Callback,
+        filters: Filter = Filter(),
+        priority: int = None,
+        allowed_updates: List[type[base.Update]] = None,
+        allowed_update: type[base.Update] = None,
+    ) -> Callback:
+        if allowed_updates and allowed_update:
+            raise ValueError("`allowed_updates` and `allowed_update` are mutually exclusive")
+
+        _allowed_updates: Optional[List[type[base.Update]]] = None
+
+        if allowed_update is not None:
+            if isinstance(allowed_update, Container):
+                raise ValueError(
+                    "list (or other container) should be passed as `allowed_updates`, not as `allowed_update`"
+                )
+
+            _allowed_updates = [allowed_update]
+
+        elif allowed_updates is not None:
+            if not isinstance(allowed_updates, Container):
+                raise TypeError("`allowed_updates` object should have `__contains__` defined")
+
+            _allowed_updates = allowed_updates
+
+        if _allowed_updates is not None:
+
+            async def types_filter_callback(_, update: PackedRawUpdate) -> bool:
+                return type(update.update) in _allowed_updates
+
+            types_filter = Filter(callback=types_filter_callback)
+            filters = types_filter & filters
+
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(
+        self,
+        filters: Filter = Filter(),
+        priority: int = None,
+        allowed_updates: List[type[base.Update]] = None,
+        allowed_update: type[base.Update] = None,
+    ) -> Callable[[Callback], Callback]:
+        def decorator(callback: Callback) -> Callback:
+            return self.register(
+                callback=callback,
+                filters=filters,
+                priority=priority,
+                allowed_updates=allowed_updates,
+                allowed_update=allowed_update,
+            )
+
+        return decorator
+
+
+class UserStatusHandlersHolder(HandlersHolder):
+    __handler_type__ = UserStatusHandler
+    handlers: List[UserStatusHandler]
+
+    async def feed_update(
+        self, client: Client, run_logic: RunLogic, update: types.User, **deps
     ) -> bool:
         return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)

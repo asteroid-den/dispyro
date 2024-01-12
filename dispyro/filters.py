@@ -1,8 +1,8 @@
 from pyrogram import Client
 from pyrogram.filters import Filter as PyrogramFilter
 
-from .signatures import FilterCallback
-from .union_types import AnyFilter, Update
+from .types import AnyFilter, Update
+from .types.signatures import FilterCallback
 from .utils import safe_call
 
 

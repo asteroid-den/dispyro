@@ -1,9 +1,10 @@
-from . import filters, handlers, union_types, utils
+from . import filters, handlers, types, utils
 from .dispatcher import Dispatcher, RunLogic
 from .filters import Filter
 from .router import Router
+from .types import PackedRawUpdate
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 
 __all__ = (
     "filters",
@@ -12,6 +13,7 @@ __all__ = (
     "Router",
     "Filter",
     "utils",
-    "union_types",
+    "types",
     "handlers",
+    "PackedRawUpdate",
 )

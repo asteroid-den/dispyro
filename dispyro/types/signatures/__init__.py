@@ -3,10 +3,13 @@ from .handler_callback import (
     CallbackQueryHandlerCallback,
     ChatMemberUpdatedHandlerCallback,
     ChosenInlineResultHandlerCallback,
+    DeletedMessagesHandlerCallback,
     EditedMessageHandlerCallback,
     InlineQueryHandlerCallback,
     MessageHandlerCallback,
     PollHandlerCallback,
+    RawUpdateHandlerCallback,
+    UserStatusHandlerCallback,
 )
 
 __all__ = (
@@ -14,8 +17,11 @@ __all__ = (
     "CallbackQueryHandlerCallback",
     "ChatMemberUpdatedHandlerCallback",
     "ChosenInlineResultHandlerCallback",
+    "DeletedMessagesHandlerCallback",
     "EditedMessageHandlerCallback",
     "InlineQueryHandlerCallback",
     "MessageHandlerCallback",
     "PollHandlerCallback",
+    "RawUpdateHandlerCallback",
+    "UserStatusHandlerCallback",
 )

@@ -13,23 +13,26 @@
 # (handler itself and `router` that registering this handler) and return
 # positive `int`.
 
-from typing import Callable
+from typing import Callable, List
 
 from pyrogram import Client, types
 
 import dispyro
 
 from .filters import Filter
-from .signatures import (
+from .types import AnyFilter, Callback, PackedRawUpdate, Update
+from .types.signatures import (
     CallbackQueryHandlerCallback,
     ChatMemberUpdatedHandlerCallback,
     ChosenInlineResultHandlerCallback,
+    DeletedMessagesHandlerCallback,
     EditedMessageHandlerCallback,
     InlineQueryHandlerCallback,
     MessageHandlerCallback,
     PollHandlerCallback,
+    RawUpdateHandlerCallback,
+    UserStatusHandlerCallback,
 )
-from .union_types import AnyFilter, Callback, Update
 from .utils import safe_call
 
 PriorityFactory = Callable[["Handler", "dispyro.Router"], int]
@@ -178,6 +181,36 @@ class ChosenInlineResultHandler(Handler):
         await super().__call__(client=client, update=update, **deps)
 
 
+class DeletedMessagesHandler(Handler):
+    callback: DeletedMessagesHandlerCallback
+
+    def __init__(
+        self,
+        *,
+        callback: DeletedMessagesHandlerCallback,
+        router: "dispyro.Router",
+        name: str = None,
+        priority: int = None,
+        filters: AnyFilter = Filter(),
+    ):
+        super().__init__(
+            callback=callback,
+            router=router,
+            name=name,
+            priority=priority,
+            filters=filters,
+        )
+
+    async def __call__(
+        self,
+        *,
+        client: Client,
+        update: List[types.Message],
+        **deps,
+    ) -> None:
+        await super().__call__(client=client, update=update, **deps)
+
+
 class EditedMessageHandler(Handler):
     callback: EditedMessageHandlerCallback
 
@@ -293,6 +326,66 @@ class PollHandler(Handler):
         *,
         client: Client,
         update: types.Poll,
+        **deps,
+    ) -> None:
+        await super().__call__(client=client, update=update, **deps)
+
+
+class RawUpdateHandler(Handler):
+    callback: RawUpdateHandlerCallback
+
+    def __init__(
+        self,
+        *,
+        callback: RawUpdateHandlerCallback,
+        router: "dispyro.Router",
+        name: str = None,
+        priority: int = None,
+        filters: AnyFilter = Filter(),
+    ):
+        super().__init__(
+            callback=callback,
+            router=router,
+            name=name,
+            priority=priority,
+            filters=filters,
+        )
+
+    async def __call__(
+        self,
+        *,
+        client: Client,
+        update: PackedRawUpdate,
+        **deps,
+    ) -> None:
+        await super().__call__(client=client, update=update, **deps)
+
+
+class UserStatusHandler(Handler):
+    callback: UserStatusHandlerCallback
+
+    def __init__(
+        self,
+        *,
+        callback: UserStatusHandlerCallback,
+        router: "dispyro.Router",
+        name: str = None,
+        priority: int = None,
+        filters: AnyFilter = Filter(),
+    ):
+        super().__init__(
+            callback=callback,
+            router=router,
+            name=name,
+            priority=priority,
+            filters=filters,
+        )
+
+    async def __call__(
+        self,
+        *,
+        client: Client,
+        update: types.User,
         **deps,
     ) -> None:
         await super().__call__(client=client, update=update, **deps)

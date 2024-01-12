@@ -8,7 +8,5 @@ import dispyro
 class FilterCallback(Protocol):
     """Signature class for filters callback with DI support."""
 
-    async def __call__(
-        self, client: Client, update: "dispyro.union_types.Update", **deps
-    ) -> bool:
+    async def __call__(self, client: Client, update: "dispyro.types.Update", **deps) -> bool:
         ...
