@@ -1,8 +1,8 @@
 from collections.abc import Container
-from typing import Callable, List, Optional
+from contextlib import suppress
+from typing import List, Optional, Type
 
-from pyrogram import Client, types
-from pyrogram.raw import base
+from pyrogram.raw import core
 
 import dispyro
 
@@ -20,23 +20,35 @@ from .handlers import (
     RawUpdateHandler,
     UserStatusHandler,
 )
-from .types import AnyFilter, Callback, Handler, PackedRawUpdate, Update
+from .processing_context_holder import ProcessingContextHolder
+from .types import AnyFilter, Handler, PackedRawUpdate
+from .types.contexts import UpdateContext
+from .types.signatures import (
+    CallbackQueryHandlerCallback,
+    ChatMemberUpdatedHandlerCallback,
+    ChosenInlineResultHandlerCallback,
+    Decorator,
+    DeletedMessagesHandlerCallback,
+    EditedMessageHandlerCallback,
+    InlineQueryHandlerCallback,
+    MessageHandlerCallback,
+    PollHandlerCallback,
+    RawUpdateHandlerCallback,
+    UserStatusHandlerCallback,
+)
+from .utils import InterruptProcessing
 
 
-class HandlersHolder:
-    __handler_type__: Handler
+class HandlersHolder(ProcessingContextHolder):
+    __handler_type__: Type[Handler]
 
-    def __init__(self, router: "dispyro.Router", filters: AnyFilter = None):
-        self.filters = Filter() & filters if filters else Filter()
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(filters=filters)
+
         self.handlers: List[Handler] = []
         self._router = router
 
-    def filter(self, filter: AnyFilter) -> None:
-        self.filters &= filter
-
-    def register(
-        self, callback: Callback, filters: Filter = Filter(), priority: int = None
-    ) -> Callback:
+    def register(self, callback, filters: AnyFilter = Filter(), priority: Optional[int] = None):
         handler_type = self.__handler_type__
 
         self.handlers.append(
@@ -50,138 +62,258 @@ class HandlersHolder:
 
         return callback
 
-    def __call__(
-        self, filters: Filter = Filter(), priority: int = None
-    ) -> Callable[[Callback], Callback]:
-        def decorator(callback: Callback) -> Callback:
+    def __call__(self, filters: Filter = Filter(), priority: Optional[int] = None):
+        def decorator(callback):
             return self.register(callback=callback, filters=filters, priority=priority)
 
         return decorator
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: Update, **deps
-    ) -> bool:
-        filters_passed = await self.filters(client, update, **deps)
+    async def feed_update(self, context: UpdateContext, run_logic: RunLogic) -> bool:
+        client = context.client
+        update = context.update
+        deps = context.data
 
-        if not filters_passed:
-            return False
+        with suppress(InterruptProcessing):
+            for middleware in self.outer_middlewares:
+                await middleware.handle(context=context)
 
-        self._router._triggered = True
+            filters_passed = await self.filters(client, update, **deps)
 
-        handlers = sorted(self.handlers, key=lambda x: x._priority)
-        for handler in handlers:
-            await handler(client=client, update=update, **deps)
+            if not filters_passed:
+                for middleware in reversed(self.outer_middlewares):
+                    await middleware.handle(context=context)
 
-            if handler._triggered and run_logic in {
-                RunLogic.ONE_RUN_PER_ROUTER,
-                RunLogic.ONE_RUN_PER_EVENT,
-            }:
-                return True
+                return False
 
-        return any(handler._triggered for handler in handlers)
+            for middleware in self.middlewares:
+                print(middleware)
+                await middleware.handle(context=context)
+
+            self._router._triggered = True
+
+            result = False
+
+            handlers = sorted(self.handlers, key=lambda x: x._priority)
+            for handler in handlers:
+                await handler(
+                    client=context.client, update=context.update, **context.data  # pyright: ignore [reportArgumentType]
+                )
+
+                if handler._triggered and run_logic in {
+                    RunLogic.ONE_RUN_PER_ROUTER,
+                    RunLogic.ONE_RUN_PER_EVENT,
+                }:
+                    result = True
+                    break
+
+            # result = any(handler._triggered for handler in handlers)
+
+            for middleware in reversed(self.middlewares):
+                await middleware.handle(context=context)
+
+            for middleware in reversed(self.outer_middlewares):
+                await middleware.handle(context=context)
+
+            return result
+
+        return False
 
 
 class CallbackQueryHandlersHolder(HandlersHolder):
     __handler_type__ = CallbackQueryHandler
     handlers: List[CallbackQueryHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.CallbackQuery, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: CallbackQueryHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> CallbackQueryHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: CallbackQueryHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class ChatMemberUpdatedHandlersHolder(HandlersHolder):
     __handler_type__ = ChatMemberUpdatedHandler
     handlers: List[ChatMemberUpdatedHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.ChatMemberUpdated, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: ChatMemberUpdatedHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> ChatMemberUpdatedHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: ChatMemberUpdatedHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class ChosenInlineResultHandlersHolder(HandlersHolder):
     __handler_type__ = ChosenInlineResultHandler
     handlers: List[ChosenInlineResultHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.ChosenInlineResult, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: ChosenInlineResultHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> ChosenInlineResultHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: ChosenInlineResultHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class DeletedMessagesHandlersHolder(HandlersHolder):
     __handler_type__ = DeletedMessagesHandler
     handlers: List[DeletedMessagesHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: List[types.Message], **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: DeletedMessagesHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> DeletedMessagesHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: DeletedMessagesHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class EditedMessageHandlersHolder(HandlersHolder):
     __handler_type__ = EditedMessageHandler
     handlers: List[EditedMessageHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.Message, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: EditedMessageHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> EditedMessageHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: EditedMessageHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class InlineQueryHandlersHolder(HandlersHolder):
     __handler_type__ = InlineQueryHandler
     handlers: List[InlineQueryHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.InlineQuery, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: InlineQueryHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> InlineQueryHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: InlineQueryHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class MessageHandlersHolder(HandlersHolder):
     __handler_type__ = MessageHandler
     handlers: List[MessageHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.Message, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: MessageHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> MessageHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: MessageHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class PollHandlersHolder(HandlersHolder):
     __handler_type__ = PollHandler
     handlers: List[PollHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.Poll, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: PollHandlerCallback,
+        filters: AnyFilter = Filter(),
+        priority: Optional[int] = None,
+    ) -> PollHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: AnyFilter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: PollHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator
 
 
 class RawUpdateHandlersHolder(HandlersHolder):
     __handler_type__ = RawUpdateHandler
     handlers: List[RawUpdateHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: PackedRawUpdate, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
 
     def register(
         self,
-        callback: Callback,
+        callback: RawUpdateHandlerCallback,
         filters: Filter = Filter(),
-        priority: int = None,
-        allowed_updates: List[type[base.Update]] = None,
-        allowed_update: type[base.Update] = None,
-    ) -> Callback:
+        priority: Optional[int] = None,
+        allowed_updates: Optional[List[Type[core.TLObject]]] = None,
+        allowed_update: Optional[Type[core.TLObject]] = None,
+    ) -> RawUpdateHandlerCallback:
         if allowed_updates and allowed_update:
             raise ValueError("`allowed_updates` and `allowed_update` are mutually exclusive")
 
-        _allowed_updates: Optional[List[type[base.Update]]] = None
+        _allowed_updates: Optional[List[Type[core.TLObject]]] = None
 
         if allowed_update is not None:
             if isinstance(allowed_update, Container):
@@ -202,7 +334,7 @@ class RawUpdateHandlersHolder(HandlersHolder):
             async def types_filter_callback(_, update: PackedRawUpdate) -> bool:
                 return type(update.update) in _allowed_updates
 
-            types_filter = Filter(callback=types_filter_callback)
+            types_filter = Filter(callback=types_filter_callback)  # pyright: ignore [reportArgumentType]
             filters = types_filter & filters
 
         return super().register(callback=callback, filters=filters, priority=priority)
@@ -210,11 +342,11 @@ class RawUpdateHandlersHolder(HandlersHolder):
     def __call__(
         self,
         filters: Filter = Filter(),
-        priority: int = None,
-        allowed_updates: List[type[base.Update]] = None,
-        allowed_update: type[base.Update] = None,
-    ) -> Callable[[Callback], Callback]:
-        def decorator(callback: Callback) -> Callback:
+        priority: Optional[int] = None,
+        allowed_updates: Optional[List[Type[core.TLObject]]] = None,
+        allowed_update: Optional[Type[core.TLObject]] = None,
+    ) -> Decorator:
+        def decorator(callback: RawUpdateHandlerCallback) -> RawUpdateHandlerCallback:
             return self.register(
                 callback=callback,
                 filters=filters,
@@ -230,7 +362,19 @@ class UserStatusHandlersHolder(HandlersHolder):
     __handler_type__ = UserStatusHandler
     handlers: List[UserStatusHandler]
 
-    async def feed_update(
-        self, client: Client, run_logic: RunLogic, update: types.User, **deps
-    ) -> bool:
-        return await super().feed_update(client=client, run_logic=run_logic, update=update, **deps)
+    def __init__(self, router: "dispyro.Router", filters: Optional[AnyFilter] = None):
+        super().__init__(router=router, filters=filters)
+
+    def register(
+        self,
+        callback: UserStatusHandlerCallback,
+        filters: Filter = Filter(),
+        priority: Optional[int] = None,
+    ) -> UserStatusHandlerCallback:
+        return super().register(callback=callback, filters=filters, priority=priority)
+
+    def __call__(self, filters: Filter = Filter(), priority: Optional[int] = None) -> Decorator:
+        def decorator(callback: UserStatusHandlerCallback):
+            return self.register(callback=callback, filters=filters, priority=priority)
+
+        return decorator

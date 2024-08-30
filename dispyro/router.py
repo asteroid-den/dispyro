@@ -1,7 +1,7 @@
 from functools import cached_property
-from typing import Dict, List
+from typing import Dict, List, Optional, Type
 
-from pyrogram import Client, handlers
+from pyrogram import handlers
 from pyrogram.handlers.handler import Handler as PyrogramHandler
 
 import dispyro
@@ -20,7 +20,7 @@ from .handlers_holders import (
     RawUpdateHandlersHolder,
     UserStatusHandlersHolder,
 )
-from .types import Update
+from .types.contexts import UpdateContext
 
 
 class Router:
@@ -29,7 +29,7 @@ class Router:
     To put things to work, must be attached to `Dispatcher`.
     """
 
-    def __init__(self, name: str = None):
+    def __init__(self, name: Optional[str] = None):
         self._name = name or "unnamed_router"
 
         self.callback_query = CallbackQueryHandlersHolder(router=self)
@@ -44,6 +44,8 @@ class Router:
         self.user_status = UserStatusHandlersHolder(router=self)
 
         self._triggered: bool = False
+        self._sub_routers: List["Router"] = []
+        self._parent_router: Optional["Router"] = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} `{self._name}`"
@@ -64,7 +66,7 @@ class Router:
         ]
 
     @cached_property
-    def handlers_correlation(self) -> Dict[PyrogramHandler, HandlersHolder]:
+    def handlers_correlation(self) -> Dict[Type[PyrogramHandler], HandlersHolder]:
         return {
             handlers.CallbackQueryHandler: self.callback_query,
             handlers.ChatMemberUpdatedHandler: self.chat_member_updated,
@@ -78,6 +80,42 @@ class Router:
             handlers.UserStatusHandler: self.user_status,
         }
 
+    def add_routers(self, *routers: "Router") -> None:
+        for router in routers:
+            self.add_router(router=router)
+
+    def add_router(self, router: "Router") -> None:
+        if router._parent_router is not None:
+            raise ValueError("Router already has a parent")
+
+        while True:
+            if router._parent_router is None:
+                break
+
+            parent = router._parent_router
+
+            if parent is self:
+                raise RecursionError("Circular reference detected")
+
+        parent = self._parent_router
+        while True:
+            if parent is None:
+                break
+
+            elif parent is router:
+                raise RecursionError("Circular reference detected")
+
+            parent = parent._parent_router
+
+        if self in router._sub_routers:
+            raise RecursionError("Circular reference detected")
+
+        if self is router:
+            raise RecursionError("Circular reference detected")
+
+        router._parent_router = self
+        self._sub_routers.append(router)
+
     def cleanup(self) -> None:
         self._triggered = False
 
@@ -86,18 +124,24 @@ class Router:
 
     async def feed_update(
         self,
-        client: Client,
+        context: UpdateContext,
         dispatcher: "dispyro.Dispatcher",
-        update: Update,
-        handler_type: PyrogramHandler,
-        **deps,
+        handler_type: Type[PyrogramHandler],
     ) -> bool:
         run_logic = dispatcher._run_logic
 
         handlers_holder = self.handlers_correlation[handler_type]
 
-        result = await handlers_holder.feed_update(
-            client=client, run_logic=run_logic, update=update, **deps
-        )
+        result = await handlers_holder.feed_update(context=context, run_logic=run_logic)
+        
+        if handler_type is handlers.MessageHandler:
+            print(f"{self._name} {handler_type.__name__} {result}")
+
+        if not result and self._sub_routers:
+            for sub_router in self._sub_routers:
+                result = await sub_router.feed_update(context=context, dispatcher=dispatcher, handler_type=handler_type)
+
+                if result:
+                    break
 
         return result

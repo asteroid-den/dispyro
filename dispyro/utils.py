@@ -6,6 +6,10 @@ from typing import Any, Callable, Dict, List, TypeVar
 ReturnType = TypeVar("ReturnType")
 
 
+class InterruptProcessing(Exception):
+    """Exception to interrupt processing of update."""
+
+
 def get_needed_kwargs(callable: Callable, **kwargs) -> Dict[str, Any]:
     """Helper function that fetches needed `kwargs`.
     Returns only needed kwargs in a form of a `dict`.

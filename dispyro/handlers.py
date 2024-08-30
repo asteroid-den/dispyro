@@ -13,7 +13,7 @@
 # (handler itself and `router` that registering this handler) and return
 # positive `int`.
 
-from typing import Callable, List
+from typing import List, Optional
 
 from pyrogram import Client, types
 
@@ -32,17 +32,15 @@ from .types.signatures import (
     PollHandlerCallback,
     RawUpdateHandlerCallback,
     UserStatusHandlerCallback,
+    PriorityFactory,
 )
 from .utils import safe_call
 
-PriorityFactory = Callable[["Handler", "dispyro.Router"], int]
-
+def default_priority_factory(handler: "Handler", router: "dispyro.Router") -> int:
+    return 1
 
 class Handler:
-    def _default_priority_factory(self, _) -> int:
-        return 1
-
-    _priority_factory: PriorityFactory = _default_priority_factory
+    _priority_factory: PriorityFactory | None = None
 
     @classmethod
     def set_priority_factory(cls, priority_factory: PriorityFactory) -> None:
@@ -53,14 +51,15 @@ class Handler:
         *,
         callback: Callback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         if priority is not None:
             self._priority = priority
         else:
-            self._priority = self._priority_factory(router)
+            factory = self._priority_factory or default_priority_factory
+            self._priority = factory(self, router)
 
         self._name = name or "unnamed_handler"
         self.callback: Callback = safe_call(callable=callback)
@@ -84,7 +83,7 @@ class Handler:
         if not filters_passed:
             return
 
-        await self.callback(client, update, **deps)
+        await self.callback(client, update, **deps) # pyright: ignore [reportArgumentType]
         self._triggered = True
 
     def __repr__(self) -> str:
@@ -99,8 +98,8 @@ class CallbackQueryHandler(Handler):
         *,
         callback: CallbackQueryHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -129,8 +128,8 @@ class ChatMemberUpdatedHandler(Handler):
         *,
         callback: ChatMemberUpdatedHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -159,8 +158,8 @@ class ChosenInlineResultHandler(Handler):
         *,
         callback: ChosenInlineResultHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -189,8 +188,8 @@ class DeletedMessagesHandler(Handler):
         *,
         callback: DeletedMessagesHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -219,8 +218,8 @@ class EditedMessageHandler(Handler):
         *,
         callback: EditedMessageHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -249,8 +248,8 @@ class InlineQueryHandler(Handler):
         *,
         callback: InlineQueryHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -279,8 +278,8 @@ class MessageHandler(Handler):
         *,
         callback: MessageHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -309,8 +308,8 @@ class PollHandler(Handler):
         *,
         callback: PollHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -339,8 +338,8 @@ class RawUpdateHandler(Handler):
         *,
         callback: RawUpdateHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(
@@ -369,8 +368,8 @@ class UserStatusHandler(Handler):
         *,
         callback: UserStatusHandlerCallback,
         router: "dispyro.Router",
-        name: str = None,
-        priority: int = None,
+        name: Optional[str] = None,
+        priority: Optional[int] = None,
         filters: AnyFilter = Filter(),
     ):
         super().__init__(

@@ -1,4 +1,4 @@
-from typing import Any, List, Protocol
+from typing import Any, Callable, List, Protocol
 
 from pyrogram import Client
 from pyrogram.types import (
@@ -12,6 +12,10 @@ from pyrogram.types import (
 )
 
 import dispyro
+
+
+Callback = Callable[..., Any]
+Decorator = Callable[[Callback], Callback]
 
 
 class CallbackQueryHandlerCallback(Protocol):
