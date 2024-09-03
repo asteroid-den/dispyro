@@ -133,9 +133,6 @@ class Router:
         handlers_holder = self.handlers_correlation[handler_type]
 
         result = await handlers_holder.feed_update(context=context, run_logic=run_logic)
-        
-        if handler_type is handlers.MessageHandler:
-            print(f"{self._name} {handler_type.__name__} {result}")
 
         if not result and self._sub_routers:
             for sub_router in self._sub_routers:
@@ -143,5 +140,11 @@ class Router:
 
                 if result:
                     break
+
+        for middleware in reversed(handlers_holder.middlewares):
+            await middleware.handle(context=context)
+
+        for middleware in reversed(handlers_holder.outer_middlewares):
+            await middleware.handle(context=context)
 
         return result

@@ -86,7 +86,6 @@ class HandlersHolder(ProcessingContextHolder):
                 return False
 
             for middleware in self.middlewares:
-                print(middleware)
                 await middleware.handle(context=context)
 
             self._router._triggered = True
@@ -108,11 +107,11 @@ class HandlersHolder(ProcessingContextHolder):
 
             # result = any(handler._triggered for handler in handlers)
 
-            for middleware in reversed(self.middlewares):
-                await middleware.handle(context=context)
+            # for middleware in reversed(self.middlewares):
+            #     await middleware.handle(context=context)
 
-            for middleware in reversed(self.outer_middlewares):
-                await middleware.handle(context=context)
+            # for middleware in reversed(self.outer_middlewares):
+            #     await middleware.handle(context=context)
 
             return result
 
