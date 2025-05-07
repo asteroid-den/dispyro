@@ -1,1 +1,1 @@
-pyrogram>=2.0
+kurigram
