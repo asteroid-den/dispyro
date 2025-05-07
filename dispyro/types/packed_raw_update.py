@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import Dict, Generic, TypeVar
 
-from pyrogram.raw.base import Chat, Update, User
+from pyrogram.raw.base import Chat, User
+from pyrogram.raw.core import TLObject
 
-T = TypeVar("T", bound=Update)
+T = TypeVar("T", bound=TLObject)
 
 
 @dataclass

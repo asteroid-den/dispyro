@@ -1,15 +1,7 @@
 from typing import List, Union
 
 import pyrogram
-from pyrogram.types import (
-    CallbackQuery,
-    ChatMemberUpdated,
-    ChosenInlineResult,
-    InlineQuery,
-    Message,
-    Poll,
-    User,
-)
+from pyrogram.types import CallbackQuery, ChatMemberUpdated, ChosenInlineResult, InlineQuery, Message, Poll, User
 
 import dispyro
 
@@ -23,6 +15,7 @@ from .signatures import (
     InlineQueryHandlerCallback,
     MessageHandlerCallback,
     PollHandlerCallback,
+    RawUpdateHandlerCallback,
     UserStatusHandlerCallback,
 )
 
@@ -36,6 +29,7 @@ Handler = Union[
     "dispyro.handlers.MessageHandler",
     "dispyro.handlers.PollHandler",
     "dispyro.handlers.UserStatusHandler",
+    "dispyro.handlers.RawUpdateHandler",
 ]
 
 Callback = Union[
@@ -48,6 +42,7 @@ Callback = Union[
     MessageHandlerCallback,
     PollHandlerCallback,
     UserStatusHandlerCallback,
+    RawUpdateHandlerCallback,
 ]
 
 Update = Union[

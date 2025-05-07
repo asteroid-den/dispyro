@@ -1,25 +1,19 @@
-import asyncio
-from typing import Any, Callable, Coroutine, Dict, List, Union
+from functools import cached_property
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, Union
 
 from pyrogram import Client, handlers, idle
-from pyrogram.handlers.handler import Handler
-from pyrogram.raw import base
+from pyrogram.handlers.handler import Handler as PyrogramHandler
+from pyrogram.raw import base, core
 
 from .enums import RunLogic
-from .handlers_holders import (
-    CallbackQueryHandlersHolder,
-    ChatMemberUpdatedHandlersHolder,
-    ChosenInlineResultHandlersHolder,
-    DeletedMessagesHandlersHolder,
-    EditedMessageHandlersHolder,
-    InlineQueryHandlersHolder,
-    MessageHandlersHolder,
-    PollHandlersHolder,
-    RawUpdateHandlersHolder,
-    UserStatusHandlersHolder,
-)
+from .processing_context_holder import ProcessingContextHolder
 from .router import Router
 from .types import PackedRawUpdate, Update
+from .types.contexts import UpdateContext
+
+PyrogramHandlerCallback = Callable[[Client, Update], Awaitable[Any]]
+PyrogramRawHandlerCallback = Callable[[Client, core.TLObject, Dict[int, base.User], Dict[int, base.Chat]], Awaitable]
+AnyPyrogramHandlerCallback = Union[PyrogramHandlerCallback, PyrogramRawHandlerCallback]
 
 
 class Dispatcher:
@@ -35,10 +29,20 @@ class Dispatcher:
         run_logic: RunLogic = RunLogic.ONE_RUN_PER_EVENT,
         **deps,
     ):
-        self._default_router = Router(name="root_router")
-        self.routers: List[Router] = [self._default_router]
+        self.routers: List[Router] = []
         self._clients: List[Client] = []
         self._deps: Dict[str, Any] = deps
+
+        self.callback_query = ProcessingContextHolder()
+        self.chat_member_updated = ProcessingContextHolder()
+        self.chosen_inline_result = ProcessingContextHolder()
+        self.deleted_messages = ProcessingContextHolder()
+        self.edited_message = ProcessingContextHolder()
+        self.inline_query = ProcessingContextHolder()
+        self.message = ProcessingContextHolder()
+        self.poll = ProcessingContextHolder()
+        self.raw_update = ProcessingContextHolder()
+        self.user_status = ProcessingContextHolder()
 
         self._ignore_preparation = ignore_preparation
         self._clear_on_prepare = clear_on_prepare
@@ -52,59 +56,32 @@ class Dispatcher:
                 client = self.prepare_client(client=client, clear_handlers=clear_on_prepare)
                 self._clients.append(client)
 
-    @property
-    def callback_query(self) -> CallbackQueryHandlersHolder:
-        return self._default_router.callback_query
+    @cached_property
+    def processing_context_correlation(self) -> Dict[Type[PyrogramHandler], ProcessingContextHolder]:
+        return {
+            handlers.CallbackQueryHandler: self.callback_query,
+            handlers.ChatMemberUpdatedHandler: self.chat_member_updated,
+            handlers.ChosenInlineResultHandler: self.chosen_inline_result,
+            handlers.DeletedMessagesHandler: self.deleted_messages,
+            handlers.EditedMessageHandler: self.edited_message,
+            handlers.InlineQueryHandler: self.inline_query,
+            handlers.MessageHandler: self.message,
+            handlers.PollHandler: self.poll,
+            handlers.RawUpdateHandler: self.raw_update,
+            handlers.UserStatusHandler: self.user_status,
+        }
 
-    @property
-    def chat_member_updated(self) -> ChatMemberUpdatedHandlersHolder:
-        return self._default_router.chat_member_updated
-
-    @property
-    def chosen_inline_result(self) -> ChosenInlineResultHandlersHolder:
-        return self._default_router.chosen_inline_result
-
-    @property
-    def deleted_messages(self) -> DeletedMessagesHandlersHolder:
-        return self._default_router.deleted_messages
-
-    @property
-    def edited_message(self) -> EditedMessageHandlersHolder:
-        return self._default_router.edited_message
-
-    @property
-    def inline_query(self) -> InlineQueryHandlersHolder:
-        return self._default_router.inline_query
-
-    @property
-    def message(self) -> MessageHandlersHolder:
-        return self._default_router.message
-
-    @property
-    def poll(self) -> PollHandlersHolder:
-        return self._default_router.poll
-
-    @property
-    def raw_update(self) -> RawUpdateHandlersHolder:
-        return self._default_router.raw_update
-
-    @property
-    def user_status(self) -> UserStatusHandlersHolder:
-        return self._default_router.user_status
-
-    def _make_handler(self, handler_type: Handler) -> Callable[[Client, Update], Coroutine]:
+    def _make_handler(self, handler_type: Type[PyrogramHandler]) -> AnyPyrogramHandlerCallback:
         if handler_type is handlers.RawUpdateHandler:
 
             async def handler(
                 client: Client,
-                update: base.Update,
+                update: core.TLObject,
                 users: Dict[int, base.User],
                 chats: Dict[int, base.Chat],
             ):
                 packed_update = PackedRawUpdate(update=update, users=users, chats=chats)
-                await self.feed_update(
-                    client=client, update=packed_update, handler_type=handler_type
-                )
+                await self.feed_update(client=client, update=packed_update, handler_type=handler_type)
 
         else:
 
@@ -114,7 +91,7 @@ class Dispatcher:
         return handler
 
     def prepare_client(self, client: Client, clear_handlers: bool = True) -> Client:
-        handler_types: List[Handler] = [
+        handler_types: List[Type[PyrogramHandler]] = [
             handlers.CallbackQueryHandler,
             handlers.ChatMemberUpdatedHandler,
             handlers.ChosenInlineResultHandler,
@@ -155,15 +132,23 @@ class Dispatcher:
         for router in self.routers:
             router.cleanup()
 
-    async def feed_update(self, client: Client, update: Update, handler_type: Handler) -> None:
+    async def feed_update(self, client: Client, update: Update, handler_type: Type[PyrogramHandler]) -> None:
+        processing_context = self.processing_context_correlation[handler_type]
+        context = UpdateContext(client=client, update=update, data=self._deps)
+
+        for middleware in processing_context.outer_middlewares:
+            await middleware.handle(context=context)
+
+        filters_passed = await processing_context.filters(client, update, **self._deps)
+
+        if not filters_passed:
+            return
+
+        for middleware in processing_context.middlewares:
+            await middleware.handle(context=context)
+
         for router in self.routers:
-            result = await router.feed_update(
-                client=client,
-                dispatcher=self,
-                update=update,
-                handler_type=handler_type,
-                **self._deps,
-            )
+            result = await router.feed_update(context=context, dispatcher=self, handler_type=handler_type)
 
             if self._run_logic is RunLogic.ONE_RUN_PER_EVENT and result:
                 break
@@ -173,7 +158,7 @@ class Dispatcher:
     async def start(
         self,
         *clients: Client,
-        ignore_preparation: bool = None,
+        ignore_preparation: Optional[bool] = None,
         only_start: bool = False,
     ) -> None:
         self.cleanup()
@@ -182,15 +167,14 @@ class Dispatcher:
             ignore_preparation = self._ignore_preparation
 
         if ignore_preparation:
-            clients = list(clients)
+            clients_list = list(clients)
 
         else:
-            clients = [
-                self.prepare_client(client=client, clear_handlers=self._clear_on_prepare)
-                for client in clients
+            clients_list = [
+                self.prepare_client(client=client, clear_handlers=self._clear_on_prepare) for client in clients
             ]
 
-        clients = self._clients + clients
+        clients_list = self._clients + clients_list
 
         for client in clients:
             if not client.is_connected:

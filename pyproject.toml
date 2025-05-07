@@ -1,0 +1,30 @@
+[tool.black]
+line-length = 120
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dispyro"
+dynamic = ["version"]
+authors = [
+  { name="asteroid-den", email="denbartolomee@gmail.com" },
+]
+description = "Improved dispatching for Pyrogram"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyrogram>=2.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/asteroid-den/dispyro"
+
+[tool.hatch.version]
+path = "dispyro/__init__.py"

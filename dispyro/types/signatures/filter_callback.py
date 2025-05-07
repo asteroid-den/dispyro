@@ -1,12 +1,3 @@
-from typing import Protocol
+from typing import Callable, Awaitable
 
-from pyrogram import Client
-
-import dispyro
-
-
-class FilterCallback(Protocol):
-    """Signature class for filters callback with DI support."""
-
-    async def __call__(self, client: Client, update: "dispyro.types.Update", **deps) -> bool:
-        ...
+FilterCallback = Callable[..., Awaitable[bool]]
