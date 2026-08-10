@@ -5,7 +5,7 @@ from .fsm import FSMContext, FSMMiddleware, MemoryStorage, State, StateFilter, S
 from .router import Router
 from .types import PackedRawUpdate
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 __all__ = (
     "Dispatcher",
