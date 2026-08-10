@@ -9,6 +9,7 @@ from pyrogram.handlers.handler import Handler as PyrogramHandler
 if TYPE_CHECKING:
     import dispyro
 
+from .enums import MiddlewareState
 from .handlers import Handler
 from .handlers_holders import (
     CallbackQueryHandlersHolder,
@@ -128,19 +129,27 @@ class Router:
 
         handlers_holder = self.handlers_correlation[handler_type]
 
-        result = await handlers_holder.feed_update(context=context, run_logic=run_logic)
+        result = False
+        try:
+            result = await handlers_holder.feed_update(context=context, run_logic=run_logic)
 
-        if not result and self._sub_routers:
-            for sub_router in self._sub_routers:
-                result = await sub_router.feed_update(context=context, dispatcher=dispatcher, handler_type=handler_type)
+            if not result and self._sub_routers:
+                for sub_router in self._sub_routers:
+                    result = await sub_router.feed_update(
+                        context=context,
+                        dispatcher=dispatcher,
+                        handler_type=handler_type,
+                    )
 
-                if result:
-                    break
+                    if result:
+                        break
+        finally:
+            for middleware in reversed(handlers_holder.middlewares):
+                if context._middlewares_context[middleware].state is MiddlewareState.CALLED_ENTER:
+                    await middleware.handle(context=context)
 
-        for middleware in reversed(handlers_holder.middlewares):
-            await middleware.handle(context=context)
-
-        for middleware in reversed(handlers_holder.outer_middlewares):
-            await middleware.handle(context=context)
+            for middleware in reversed(handlers_holder.outer_middlewares):
+                if context._middlewares_context[middleware].state is MiddlewareState.CALLED_ENTER:
+                    await middleware.handle(context=context)
 
         return result

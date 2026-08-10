@@ -85,9 +85,6 @@ class HandlersHolder(ProcessingContextHolder, Generic[HandlerCallbackT]):
             filters_passed = await self.filters(context=context)
 
             if not filters_passed:
-                for middleware in reversed(self.outer_middlewares):
-                    await middleware.handle(context=context)
-
                 return False
 
             for middleware in self.middlewares:

@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from functools import cached_property
 from typing import Any
 
@@ -6,7 +7,7 @@ from pyrogram import Client, handlers, idle
 from pyrogram.handlers.handler import Handler as PyrogramHandler
 from pyrogram.raw import base, core
 
-from .enums import RunLogic
+from .enums import MiddlewareState, RunLogic
 from .fsm.middleware import FSMMiddleware
 from .fsm.storages import MemoryStorage, StateStorage
 from .fsm.strategy import FSMStrategy
@@ -14,6 +15,7 @@ from .processing_context_holder import ProcessingContextHolder
 from .router import Router
 from .types import PackedRawUpdate, Update
 from .types.contexts import UpdateContext
+from .utils import InterruptProcessing
 
 PyrogramHandlerCallback = Callable[[Client, Update], Awaitable[Any]]
 PyrogramRawHandlerCallback = Callable[[Client, core.TLObject, dict[int, base.User], dict[int, base.Chat]], Awaitable]
@@ -160,22 +162,33 @@ class Dispatcher:
         processing_context = self.processing_context_correlation[handler_type]
         context = UpdateContext(client=client, update=update, data=self._deps.copy())
 
-        for middleware in processing_context.outer_middlewares:
-            await middleware.handle(context=context)
+        try:
+            with suppress(InterruptProcessing):
+                for middleware in processing_context.outer_middlewares:
+                    await middleware.handle(context=context)
 
-        filters_passed = await processing_context.filters(context=context)
+                filters_passed = await processing_context.filters(context=context)
 
-        if not filters_passed:
-            return
+                if not filters_passed:
+                    return
 
-        for middleware in processing_context.middlewares:
-            await middleware.handle(context=context)
+                for middleware in processing_context.middlewares:
+                    await middleware.handle(context=context)
 
-        for router in self.routers:
-            result = await router.feed_update(context=context, dispatcher=self, handler_type=handler_type)
+                for router in self.routers:
+                    result = await router.feed_update(context=context, dispatcher=self, handler_type=handler_type)
 
-            if self._run_logic is RunLogic.ONE_RUN_PER_EVENT and result:
-                break
+                    if self._run_logic is RunLogic.ONE_RUN_PER_EVENT and result:
+                        break
+
+        finally:
+            for middleware in reversed(processing_context.middlewares):
+                if context._middlewares_context[middleware].state is MiddlewareState.CALLED_ENTER:
+                    await middleware.handle(context=context)
+
+            for middleware in reversed(processing_context.outer_middlewares):
+                if context._middlewares_context[middleware].state is MiddlewareState.CALLED_ENTER:
+                    await middleware.handle(context=context)
 
     async def start(
         self,
