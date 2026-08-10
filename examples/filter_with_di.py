@@ -9,8 +9,8 @@ router.message.filter(filters.me)  # processing only messages from account itsel
 router.message.filter(filters.command("salad", prefixes=".")) # processing only .salad command
 
 async def fruits_filter_callback(_: Client, message: types.Message, fruits: list[str]):
-    # this filter goes after filters.command(), so message.command is not None
-    return all(fruit in fruits for fruit in message.command[1:])
+    # check if all fruits in command are in the list of available fruits
+    return message.command is not None and all(fruit in fruits for fruit in message.command[1:])
 
 fruits_filter = Filter(fruits_filter_callback)
 

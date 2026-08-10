@@ -17,7 +17,7 @@ async def handler(_: Client, message: types.Message, numbers: list[int]):
 
 @router.message(filters.command("add", prefixes="."))
 async def handler(_: Client, message: types.Message, numbers: list[int]):
-    values = message.command[1:]
+    values = message.command[1:] if message.command is not None else []
 
     if not values:
         await message.delete()
